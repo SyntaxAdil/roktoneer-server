@@ -73,21 +73,35 @@ async function run() {
       }),
     );
 
-    // Donation Request get by email
+    // Donation Request get by email | My donation request
     app.get(
       "/api/donation-request/:email",
       authMiddleware,
       checkRoleMiddleware(["admin", "volunteer", "donor"]),
       asyncHandler(async (req, res) => {
         const donorEmail = req.params.email;
+        const { status, page = 1, limit = 3 } = req.query; 
+
+        let query = { requesterEmail: donorEmail };
+        if (status) {
+          query.donationStatus = status;
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
         const donationRequests = await donationRequestsCollection
-          .find({ requesterEmail: donorEmail })
+          .find(query)
+          .skip(skip)
+          .limit(parseInt(limit))
           .toArray();
+
+    
+        const totalRequests = await donationRequestsCollection.countDocuments(query);
 
         return res.status(200).json({
           message: "Donation Request Fetched Successflly",
           data: donationRequests,
+          total: totalRequests,
           success: true,
         });
       }),
@@ -218,6 +232,9 @@ async function run() {
       }),
     );
 
+
+
+    //TASK- Eta comment korte hbe
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB!");
   } catch (error) {
