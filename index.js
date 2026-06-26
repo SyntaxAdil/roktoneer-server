@@ -41,7 +41,83 @@ async function run() {
 
     userCollection = db.collection("user");
     donationRequestsCollection = db.collection("donationRequests");
+// public pending requests
 
+    app.get(
+  "/api/donation-requests/public-pending",
+  asyncHandler(async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 6;
+    const skip = (page - 1) * limit;
+
+    const query = { donationStatus: "pending" };
+
+    const [donationRequests, totalItems] = await Promise.all([
+      donationRequestsCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      donationRequestsCollection.countDocuments(query),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return res.status(200).json({
+      success: true,
+      message: "Pending donation requests fetched successfully",
+      data: donationRequests,
+      currentPage: page,
+      totalPages: totalPages,
+      totalItems: totalItems,
+    });
+  }),
+);
+
+    // search donation requests
+app.get(
+  "/api/donation-requests/search",
+  asyncHandler(async (req, res) => {
+    const { bloodGroup, district, upazila } = req.query;
+    
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 6;
+    const skip = (page - 1) * limit;
+
+    let query = {};
+
+    if (bloodGroup) {
+      query.bloodGroup = bloodGroup;
+    }
+
+    if (district) {
+      query.recipientDistrict = district;
+    }
+
+    if (upazila) {
+      query.recipientUpazila = upazila;
+    }
+
+    const totalItems = await donationRequestsCollection.countDocuments(query);
+    const totalPages = Math.ceil(totalItems / limit);
+
+    const donationRequests = await donationRequestsCollection
+      .find(query)
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
+    return res.status(200).json({
+      success: true,
+      message: "Donation requests fetched successfully",
+      data: donationRequests,
+      totalPages,
+      currentPage: page,
+      totalItems,
+    });
+  }),
+);
     // all donation requests
 
     app.get(
@@ -411,58 +487,7 @@ async function run() {
       }),
     );
 
-    // public pending requests
-
-    app.get(
-      "/api/donation-requests/public-pending",
-      asyncHandler(async (req, res) => {
-        const donationRequests = await donationRequestsCollection
-          .find({
-            donationStatus: "pending",
-          })
-          .sort({ createdAt: -1 })
-          .toArray();
-
-        return res.status(200).json({
-          success: true,
-          message: "Pending donation requests fetched successfully",
-          data: donationRequests,
-        });
-      }),
-    );
-
-    // search donation requests
-
-    app.get(
-      "/api/donation-requests/search",
-      asyncHandler(async (req, res) => {
-        const { bloodGroup, district, upazila } = req.query;
-
-        let query = {};
-
-        if (bloodGroup) {
-          query.bloodGroup = bloodGroup;
-        }
-
-        if (district) {
-          query.recipientDistrict = district;
-        }
-
-        if (upazila) {
-          query.recipientUpazila = upazila;
-        }
-
-        const donationRequests = await donationRequestsCollection
-          .find(query)
-          .toArray();
-
-        return res.status(200).json({
-          success: true,
-          message: "Donation requests fetched successfully",
-          data: donationRequests,
-        });
-      }),
-    );
+    
 
     // all users
 
