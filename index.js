@@ -27,23 +27,9 @@ const client = new MongoClient(uri, {
 
 let userCollection, donationRequestsCollection;
 
-const validBloodGroups = [
-  "A+",
-  "A-",
-  "B+",
-  "B-",
-  "AB+",
-  "AB-",
-  "O+",
-  "O-",
-];
+const validBloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
-const validStatuses = [
-  "pending",
-  "inprogress",
-  "done",
-  "canceled",
-];
+const validStatuses = ["pending", "inprogress", "done", "canceled"];
 
 async function run() {
   try {
@@ -53,20 +39,50 @@ async function run() {
 
     // collections
 
-    userCollection = db.collection("users");
-    donationRequestsCollection =
-      db.collection("donationRequests");
+    userCollection = db.collection("user");
+    donationRequestsCollection = db.collection("donationRequests");
+
+    // all donation requests
+
+    app.get(
+      "/api/donation-requests/all",
+      authMiddleware,
+
+      asyncHandler(async (req, res) => {
+        const { status, page = 1, limit = 3 } = req.query;
+
+        let query = {};
+
+        if (status) {
+          query.donationStatus = status;
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        const donationRequests = await donationRequestsCollection
+          .find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit))
+          .toArray();
+
+        const total = await donationRequestsCollection.countDocuments(query);
+
+        return res.status(200).json({
+          success: true,
+          message: "Donation requests fetched successfully",
+          data: donationRequests,
+          total,
+        });
+      }),
+    );
 
     // create donation request
 
     app.post(
       "/api/donation-request",
       authMiddleware,
-      checkRoleMiddleware([
-        "admin",
-        "volunteer",
-        "donor",
-      ]),
+      checkRoleMiddleware(["admin", "volunteer", "donor"]),
       asyncHandler(async (req, res) => {
         const body = req.body;
 
@@ -88,9 +104,7 @@ async function run() {
           });
         }
 
-        if (
-          !validBloodGroups.includes(body.bloodGroup)
-        ) {
+        if (!validBloodGroups.includes(body.bloodGroup)) {
           return res.status(400).json({
             success: false,
             message: "Invalid blood group",
@@ -103,15 +117,11 @@ async function run() {
           createdAt: new Date(),
         };
 
-        const result =
-          await donationRequestsCollection.insertOne(
-            finalData,
-          );
+        const result = await donationRequestsCollection.insertOne(finalData);
 
         return res.status(201).json({
           success: true,
-          message:
-            "Donation request created successfully",
+          message: "Donation request created successfully",
           data: result,
         });
       }),
@@ -122,19 +132,14 @@ async function run() {
     app.get(
       "/api/donation-request/:email",
       authMiddleware,
-      checkRoleMiddleware(["admin", "donor"]),
+      checkRoleMiddleware(["admin", "donor", "volunteer"]),
       asyncHandler(async (req, res) => {
         const donorEmail = req.params.email;
 
-        const {
-          status,
-          page = 1,
-          limit = 3,
-        } = req.query;
+        const { status, page = 1, limit = 3 } = req.query;
 
         if (
-          req.user.email !== donorEmail &&
-          req.user.role !== "admin"
+          req.user.email !== donorEmail
         ) {
           return res.status(403).json({
             success: false,
@@ -146,30 +151,24 @@ async function run() {
           requesterEmail: donorEmail,
         };
 
-        if (status) {
+        if (status && status !== "all") {
           query.donationStatus = status;
         }
 
-        const skip =
-          (parseInt(page) - 1) * parseInt(limit);
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        const donationRequests =
-          await donationRequestsCollection
-            .find(query)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit))
-            .toArray();
+        const donationRequests = await donationRequestsCollection
+          .find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit))
+          .toArray();
 
-        const total =
-          await donationRequestsCollection.countDocuments(
-            query,
-          );
+        const total = await donationRequestsCollection.countDocuments(query);
 
         return res.status(200).json({
           success: true,
-          message:
-            "Donation requests fetched successfully",
+          message: "Donation requests fetched successfully",
           data: donationRequests,
           total,
         });
@@ -181,18 +180,13 @@ async function run() {
     app.get(
       "/api/donation-requests/:id",
       authMiddleware,
-      checkRoleMiddleware([
-        "admin",
-        "volunteer",
-        "donor",
-      ]),
+      checkRoleMiddleware(["admin", "volunteer", "donor"]),
       asyncHandler(async (req, res) => {
         const { id } = req.params;
 
-        const donationInfo =
-          await donationRequestsCollection.findOne({
-            _id: new ObjectId(id),
-          });
+        const donationInfo = await donationRequestsCollection.findOne({
+          _id: new ObjectId(id),
+        });
 
         if (!donationInfo) {
           return res.status(404).json({
@@ -203,8 +197,7 @@ async function run() {
 
         return res.status(200).json({
           success: true,
-          message:
-            "Donation request fetched successfully",
+          message: "Donation request fetched successfully",
           data: donationInfo,
         });
       }),
@@ -219,10 +212,9 @@ async function run() {
       asyncHandler(async (req, res) => {
         const { id } = req.params;
 
-        const donationInfo =
-          await donationRequestsCollection.findOne({
-            _id: new ObjectId(id),
-          });
+        const donationInfo = await donationRequestsCollection.findOne({
+          _id: new ObjectId(id),
+        });
 
         if (!donationInfo) {
           return res.status(404).json({
@@ -232,8 +224,7 @@ async function run() {
         }
 
         if (
-          req.user.email !==
-            donationInfo.requesterEmail &&
+          req.user.email !== donationInfo.requesterEmail &&
           req.user.role !== "admin"
         ) {
           return res.status(403).json({
@@ -254,10 +245,7 @@ async function run() {
           fullAddress,
         } = req.body;
 
-        if (
-          bloodGroup &&
-          !validBloodGroups.includes(bloodGroup)
-        ) {
+        if (bloodGroup && !validBloodGroups.includes(bloodGroup)) {
           return res.status(400).json({
             success: false,
             message: "Invalid blood group",
@@ -278,24 +266,21 @@ async function run() {
 
         Object.keys(allowedUpdates).forEach(
           (key) =>
-            allowedUpdates[key] === undefined &&
-            delete allowedUpdates[key],
+            allowedUpdates[key] === undefined && delete allowedUpdates[key],
         );
 
-        const result =
-          await donationRequestsCollection.updateOne(
-            {
-              _id: new ObjectId(id),
-            },
-            {
-              $set: allowedUpdates,
-            },
-          );
+        const result = await donationRequestsCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+          },
+          {
+            $set: allowedUpdates,
+          },
+        );
 
         return res.status(200).json({
           success: true,
-          message:
-            "Donation request updated successfully",
+          message: "Donation request updated successfully",
           modifiedCount: result.modifiedCount,
         });
       }),
@@ -306,33 +291,22 @@ async function run() {
     app.patch(
       "/api/donation-requests/status/:id",
       authMiddleware,
-      checkRoleMiddleware([
-        "admin",
-        "volunteer",
-        "donor",
-      ]),
+      checkRoleMiddleware(["admin", "volunteer", "donor"]),
       asyncHandler(async (req, res) => {
         const { id } = req.params;
 
-        const {
-          donationStatus,
-          donorName,
-          donorEmail,
-        } = req.body;
+        const { donationStatus, donorName, donorEmail } = req.body;
 
-        if (
-          !validStatuses.includes(donationStatus)
-        ) {
+        if (!validStatuses.includes(donationStatus)) {
           return res.status(400).json({
             success: false,
             message: "Invalid donation status",
           });
         }
 
-        const donationInfo =
-          await donationRequestsCollection.findOne({
-            _id: new ObjectId(id),
-          });
+        const donationInfo = await donationRequestsCollection.findOne({
+          _id: new ObjectId(id),
+        });
 
         if (!donationInfo) {
           return res.status(404).json({
@@ -342,10 +316,7 @@ async function run() {
         }
 
         if (req.user.role === "donor") {
-          if (
-            req.user.email !==
-            donationInfo.requesterEmail
-          ) {
+          if (req.user.email !== donationInfo.requesterEmail) {
             return res.status(403).json({
               success: false,
               message: "Forbidden access",
@@ -355,27 +326,21 @@ async function run() {
 
         if (
           donationStatus === "inprogress" &&
-          donationInfo.donationStatus !==
-            "pending"
+          donationInfo.donationStatus !== "pending"
         ) {
           return res.status(400).json({
             success: false,
-            message:
-              "Only pending request can become inprogress",
+            message: "Only pending request can become inprogress",
           });
         }
 
         if (
-          ["done", "canceled"].includes(
-            donationStatus,
-          ) &&
-          donationInfo.donationStatus !==
-            "inprogress"
+          ["done", "canceled"].includes(donationStatus) &&
+          donationInfo.donationStatus !== "inprogress"
         ) {
           return res.status(400).json({
             success: false,
-            message:
-              "Only inprogress request can become done or canceled",
+            message: "Only inprogress request can become done or canceled",
           });
         }
 
@@ -388,20 +353,18 @@ async function run() {
           updateFields.donorEmail = donorEmail;
         }
 
-        const result =
-          await donationRequestsCollection.updateOne(
-            {
-              _id: new ObjectId(id),
-            },
-            {
-              $set: updateFields,
-            },
-          );
+        const result = await donationRequestsCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+          },
+          {
+            $set: updateFields,
+          },
+        );
 
         return res.status(200).json({
           success: true,
-          message:
-            "Donation request status updated successfully",
+          message: "Donation request status updated successfully",
           modifiedCount: result.modifiedCount,
         });
       }),
@@ -416,10 +379,9 @@ async function run() {
       asyncHandler(async (req, res) => {
         const { id } = req.params;
 
-        const donationInfo =
-          await donationRequestsCollection.findOne({
-            _id: new ObjectId(id),
-          });
+        const donationInfo = await donationRequestsCollection.findOne({
+          _id: new ObjectId(id),
+        });
 
         if (!donationInfo) {
           return res.status(404).json({
@@ -429,8 +391,7 @@ async function run() {
         }
 
         if (
-          req.user.email !==
-            donationInfo.requesterEmail &&
+          req.user.email !== donationInfo.requesterEmail &&
           req.user.role !== "admin"
         ) {
           return res.status(403).json({
@@ -445,8 +406,7 @@ async function run() {
 
         return res.status(200).json({
           success: true,
-          message:
-            "Donation request deleted successfully",
+          message: "Donation request deleted successfully",
         });
       }),
     );
@@ -456,18 +416,16 @@ async function run() {
     app.get(
       "/api/donation-requests/public-pending",
       asyncHandler(async (req, res) => {
-        const donationRequests =
-          await donationRequestsCollection
-            .find({
-              donationStatus: "pending",
-            })
-            .sort({ createdAt: -1 })
-            .toArray();
+        const donationRequests = await donationRequestsCollection
+          .find({
+            donationStatus: "pending",
+          })
+          .sort({ createdAt: -1 })
+          .toArray();
 
         return res.status(200).json({
           success: true,
-          message:
-            "Pending donation requests fetched successfully",
+          message: "Pending donation requests fetched successfully",
           data: donationRequests,
         });
       }),
@@ -478,11 +436,7 @@ async function run() {
     app.get(
       "/api/donation-requests/search",
       asyncHandler(async (req, res) => {
-        const {
-          bloodGroup,
-          district,
-          upazila,
-        } = req.query;
+        const { bloodGroup, district, upazila } = req.query;
 
         let query = {};
 
@@ -498,15 +452,13 @@ async function run() {
           query.recipientUpazila = upazila;
         }
 
-        const donationRequests =
-          await donationRequestsCollection
-            .find(query)
-            .toArray();
+        const donationRequests = await donationRequestsCollection
+          .find(query)
+          .toArray();
 
         return res.status(200).json({
           success: true,
-          message:
-            "Donation requests fetched successfully",
+          message: "Donation requests fetched successfully",
           data: donationRequests,
         });
       }),
@@ -519,20 +471,15 @@ async function run() {
       authMiddleware,
       checkRoleMiddleware(["admin"]),
       asyncHandler(async (req, res) => {
-        const {
-          status,
-          page = 1,
-          limit = 3,
-        } = req.query;
+        const { status, page = 1, limit = 3 } = req.query;
 
         let query = {};
 
-        if (status) {
+        if (status && status !== "all") {
           query.status = status;
         }
 
-        const skip =
-          (parseInt(page) - 1) * parseInt(limit);
+        const skip = (parseInt(page) - 1) * parseInt(limit);
 
         const users = await userCollection
           .find(query)
@@ -540,8 +487,7 @@ async function run() {
           .limit(parseInt(limit))
           .toArray();
 
-        const total =
-          await userCollection.countDocuments(query);
+        const total = await userCollection.countDocuments(query);
 
         return res.status(200).json({
           success: true,
@@ -562,19 +508,16 @@ async function run() {
         const { id } = req.params;
         const { status } = req.body;
 
-        if (
-          !["active", "blocked"].includes(status)
-        ) {
+        if (!["active", "blocked"].includes(status)) {
           return res.status(400).json({
             success: false,
             message: "Invalid status",
           });
         }
 
-        const userInfo =
-          await userCollection.findOne({
-            _id: new ObjectId(id),
-          });
+        const userInfo = await userCollection.findOne({
+          _id: new ObjectId(id),
+        });
 
         if (!userInfo) {
           return res.status(404).json({
@@ -583,20 +526,18 @@ async function run() {
           });
         }
 
-        const result =
-          await userCollection.updateOne(
-            {
-              _id: new ObjectId(id),
-            },
-            {
-              $set: { status },
-            },
-          );
+        const result = await userCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+          },
+          {
+            $set: { status },
+          },
+        );
 
         return res.status(200).json({
           success: true,
-          message:
-            "User status updated successfully",
+          message: "User status updated successfully",
           modifiedCount: result.modifiedCount,
         });
       }),
@@ -612,21 +553,16 @@ async function run() {
         const { id } = req.params;
         const { role } = req.body;
 
-        if (
-          !["admin", "volunteer", "donor"].includes(
-            role,
-          )
-        ) {
+        if (!["admin", "volunteer", "donor"].includes(role)) {
           return res.status(400).json({
             success: false,
             message: "Invalid role",
           });
         }
 
-        const userInfo =
-          await userCollection.findOne({
-            _id: new ObjectId(id),
-          });
+        const userInfo = await userCollection.findOne({
+          _id: new ObjectId(id),
+        });
 
         if (!userInfo) {
           return res.status(404).json({
@@ -635,69 +571,19 @@ async function run() {
           });
         }
 
-        const result =
-          await userCollection.updateOne(
-            {
-              _id: new ObjectId(id),
-            },
-            {
-              $set: { role },
-            },
-          );
+        const result = await userCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+          },
+          {
+            $set: { role },
+          },
+        );
 
         return res.status(200).json({
           success: true,
-          message:
-            "User role updated successfully",
+          message: "User role updated successfully",
           modifiedCount: result.modifiedCount,
-        });
-      }),
-    );
-
-    // all donation requests
-
-    app.get(
-      "/api/donation-requests/all",
-      authMiddleware,
-      checkRoleMiddleware([
-        "admin",
-        "volunteer",
-      ]),
-      asyncHandler(async (req, res) => {
-        const {
-          status,
-          page = 1,
-          limit = 3,
-        } = req.query;
-
-        let query = {};
-
-        if (status) {
-          query.donationStatus = status;
-        }
-
-        const skip =
-          (parseInt(page) - 1) * parseInt(limit);
-
-        const donationRequests =
-          await donationRequestsCollection
-            .find(query)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit))
-            .toArray();
-
-        const total =
-          await donationRequestsCollection.countDocuments(
-            query,
-          );
-
-        return res.status(200).json({
-          success: true,
-          message:
-            "Donation requests fetched successfully",
-          data: donationRequests,
-          total,
         });
       }),
     );
@@ -707,20 +593,18 @@ async function run() {
     app.get(
       "/api/featured-donor",
       asyncHandler(async (req, res) => {
-        const featuredDonors =
-          await userCollection
-            .find({
-              role: "donor",
-              status: "active",
-            })
-            .sort({ createdAt: -1 })
-            .limit(6)
-            .toArray();
+        const featuredDonors = await userCollection
+          .find({
+            role: "donor",
+            status: "active",
+          })
+          .sort({ createdAt: -1 })
+          .limit(6)
+          .toArray();
 
         return res.status(200).json({
           success: true,
-          message:
-            "Featured donors fetched successfully",
+          message: "Featured donors fetched successfully",
           data: featuredDonors,
         });
       }),
@@ -732,10 +616,7 @@ async function run() {
 
     console.log("Connected to MongoDB!");
   } catch (error) {
-    console.error(
-      "MongoDB connection error:",
-      error,
-    );
+    console.error("MongoDB connection error:", error);
   }
 }
 
