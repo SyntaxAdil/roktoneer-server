@@ -24,7 +24,7 @@ const client = new MongoClient(uri, {
   },
 });
 
-let userCollection;
+let userCollection, donationRequestsCollection;
 
 async function run() {
   try {
@@ -134,6 +134,7 @@ async function run() {
     );
 
     // Upadate for donation request
+
     app.put(
       "/api/donation-requests/:id",
       authMiddleware,
@@ -144,18 +145,49 @@ async function run() {
         const donationInfo = await donationRequestsCollection.findOne({
           _id: new ObjectId(id),
         });
+
         if (!donationInfo) {
           return res.status(404).json({
             message: "Donation Request not found.",
             success: false,
           });
         }
+
+        const {
+          recipientName,
+          recipientDistrict,
+          recipientUpazila,
+          hospitalName,
+          bloodGroup,
+          date,
+          time,
+          details,
+        } = req.body;
+
+        // allowed field to update
+        const allowedUpdates = {
+          recipientName,
+          recipientDistrict,
+          recipientUpazila,
+          hospitalName,
+          bloodGroup,
+          date,
+          time,
+          details,
+        };
+        // un updated field delete
+        Object.keys(allowedUpdates).forEach(
+          (key) =>
+            allowedUpdates[key] === undefined && delete allowedUpdates[key],
+        );
+
         const updateDonationReq = await donationRequestsCollection.updateOne(
           { _id: new ObjectId(id) },
           {
-            $set: req.body,
+            $set: allowedUpdates,
           },
         );
+
         return res.status(200).json({
           message: "Donation Request updated successfully.",
           success: true,
@@ -163,7 +195,6 @@ async function run() {
         });
       }),
     );
-
     // delete  donation request
     app.delete(
       "/api/donation-requests/:id",
@@ -280,7 +311,7 @@ async function run() {
     // all user info for admin
     app.get(
       "/api/users",
-      verifyToken,
+      authMiddleware,
       checkRoleMiddleware(["admin"]),
       asyncHandler(async (req, res) => {
         const { status, page = 1, limit = 3 } = req.query;
@@ -311,7 +342,7 @@ async function run() {
     // user status control by admin
     app.patch(
       "/api/users/status/:id",
-      verifyToken,
+      authMiddleware,
       checkRoleMiddleware(["admin"]),
       asyncHandler(async (req, res) => {
         const id = req.params.id;
@@ -346,7 +377,7 @@ async function run() {
     // user role change by admin | Donar, Volunteer, Admin
     app.patch(
       "/api/users/role/:id",
-      verifyToken,
+      authMiddleware,
       checkRoleMiddleware(["admin"]),
       asyncHandler(async (req, res) => {
         const id = req.params.id;
@@ -381,7 +412,7 @@ async function run() {
     // get all donation request for admin
     app.get(
       "/api/all-donation-requests",
-      verifyToken,
+      authMiddleware,
       checkRoleMiddleware(["admin", "volunteer"]),
       asyncHandler(async (req, res) => {
         const { limit = 3, page = 1, status } = req.query;
@@ -412,7 +443,7 @@ async function run() {
 
     // 06 user data for home page
     app.get(
-      "/api/feautured-donor",
+      "/api/featured-donor",
       asyncHandler(async (req, res) => {
         const feauturedDonars = await userCollection
           .find({ role: "donor" })
@@ -421,7 +452,7 @@ async function run() {
           .toArray();
 
         return res.status(200).json({
-          message: "Featured Donor Fetched Successflly",
+          message: "Featured Donor Fetched Successfully",
           data: feauturedDonars,
           success: true,
         });
