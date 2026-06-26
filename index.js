@@ -24,14 +24,199 @@ const client = new MongoClient(uri, {
   },
 });
 
-let  userCollection;
+let userCollection;
 
 async function run() {
   try {
     await client.connect();
 
     const db = client.db("roktoneer");
+    // collections
     userCollection = db.collection("user");
+    donationRequestsCollection = db.collection("donationRequests");
+
+    // API'S
+
+    // API for blood request
+
+    // Donation request create
+    app.post(
+      "/api/donation-request",
+      authMiddleware,
+      checkRoleMiddleware(["admin", "volunteer", "donor"]),
+      asyncHandler(async (req, res) => {
+        const body = req.body;
+
+        const donarInfo = await userCollection.findOne({
+          email: body.requesterEmail,
+        });
+
+        if (!donarInfo || donarInfo.status !== "active") {
+          return res.status(403).json({
+            message: "Donar is Blocked or Not Found",
+            success: false,
+          });
+        }
+
+        const finalData = {
+          ...body,
+          donationStatus: "pending",
+        };
+
+        const newDonationRequest =
+          await donationRequestsCollection.insertOne(finalData);
+        return res.status(201).json({
+          message: "Donation Request Created Successflly",
+          data: newDonationRequest,
+          success: true,
+        });
+      }),
+    );
+
+    // Donation Request get by email
+    app.get(
+      "/api/donation-request/:email",
+      authMiddleware,
+      checkRoleMiddleware(["admin", "volunteer", "donor"]),
+      asyncHandler(async (req, res) => {
+        const donorEmail = req.params.email;
+
+        const donationRequests = await donationRequestsCollection
+          .find({ requesterEmail: donorEmail })
+          .toArray();
+
+        return res.status(200).json({
+          message: "Donation Request Fetched Successflly",
+          data: donationRequests,
+          success: true,
+        });
+      }),
+    );
+
+    // single donation request
+    app.get(
+      "/api/donation-requests/:id",
+      authMiddleware,
+      checkRoleMiddleware(["admin", "volunteer", "donor"]),
+      asyncHandler(async (req, res) => {
+        const id = req.params.id;
+
+        const donationInfo = await donationRequestsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!donationInfo) {
+          return res.status(404).json({
+            message: "Donation Request not found.",
+            success: false,
+          });
+        }
+
+        return res.status(200).json({
+          message: "Donation Request Fetched Successflly",
+          data: donationInfo,
+          success: true,
+        });
+      }),
+    );
+
+    // Upadate for donation request
+    app.put(
+      "/api/donation-requests/:id",
+      authMiddleware,
+      checkRoleMiddleware(["admin", "volunteer", "donor"]),
+      asyncHandler(async (req, res) => {
+        const id = req.params.id;
+
+        const donationInfo = await donationRequestsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!donationInfo) {
+          return res.status(404).json({
+            message: "Donation Request not found.",
+            success: false,
+          });
+        }
+        const updateDonationReq = await donationRequestsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: req.body,
+          },
+        );
+        return res.status(200).json({
+          message: "Donation Request updated successfully.",
+          success: true,
+          modifiedCount: updateDonationReq.modifiedCount,
+        });
+      }),
+    );
+
+    // delete  donation request
+    app.delete(
+      "/api/donation-requests/:id",
+      authMiddleware,
+      checkRoleMiddleware(["admin", "volunteer", "donor"]),
+      asyncHandler(async (req, res) => {
+        const id = req.params.id;
+
+        const donationInfo = await donationRequestsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!donationInfo) {
+          return res.status(404).json({
+            message: "Donation Request not found.",
+            success: false,
+          });
+        }
+        await donationRequestsCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        return res.status(200).json({
+          message: "Donation Request deleted successfully.",
+          success: true,
+        });
+      }),
+    );
+
+    // Pending -> Inprogress -> Done/Canceled
+    app.patch(
+      "/api/donation-requests/status/:id",
+      authMiddleware,
+      checkRoleMiddleware(["admin", "volunteer", "donor"]),
+      asyncHandler(async (req, res) => {
+        const id = req.params.id;
+        const { donationStatus, donorName, donorEmail } = req.body;
+
+        const donationInfo = await donationRequestsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!donationInfo) {
+          return res.status(404).json({
+            message: "Donation Request not found.",
+            success: false,
+          });
+        }
+
+        let updateFields = { donationStatus: donationStatus };
+
+        if (donationStatus === "inprogress") {
+          updateFields.donorName = donorName;
+          updateFields.donorEmail = donorEmail;
+        }
+
+        const updateDonationReqStatus =
+          await donationRequestsCollection.updateOne(
+            { _id: new ObjectId(id) },
+            {
+              $set: updateFields,
+            },
+          );
+        return res.status(200).json({
+          message: "Donation Request status updated successfully.",
+          success: true,
+          modifiedCount: updateDonationReqStatus.modifiedCount,
+        });
+      }),
+    );
 
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB!");
