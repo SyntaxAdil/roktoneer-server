@@ -224,7 +224,7 @@ async function run() {
     app.patch(
       "/api/donation-requests/:id",
       authMiddleware,
-      checkRoleMiddleware(["admin", "donor","volunteer"]),
+      checkRoleMiddleware(["admin", "donor", "volunteer"]),
       asyncHandler(async (req, res) => {
         const { id } = req.params;
 
@@ -239,7 +239,7 @@ async function run() {
           });
         }
 
-       
+
         const {
           recipientName,
           recipientDistrict,
@@ -418,7 +418,7 @@ async function run() {
       }),
     );
 
-    
+
     // update donation request status
 
     app.patch(
@@ -448,35 +448,6 @@ async function run() {
           });
         }
 
-        if (req.user.role === "donor") {
-          if (req.user.email !== donationInfo.requesterEmail) {
-            return res.status(403).json({
-              success: false,
-              message: "Forbidden access",
-            });
-          }
-        }
-
-        if (
-          donationStatus === "inprogress" &&
-          donationInfo.donationStatus !== "pending"
-        ) {
-          return res.status(400).json({
-            success: false,
-            message: "Only pending request can become inprogress",
-          });
-        }
-
-        if (
-          ["done", "canceled"].includes(donationStatus) &&
-          donationInfo.donationStatus !== "inprogress"
-        ) {
-          return res.status(400).json({
-            success: false,
-            message: "Only inprogress request can become done or canceled",
-          });
-        }
-
         let updateFields = {
           donationStatus,
         };
@@ -486,13 +457,21 @@ async function run() {
           updateFields.donorEmail = donorEmail;
         }
 
+        if (donationStatus === "done") {
+          updateFields.doneAt = new Date();
+        }
+
+        if (donationStatus === "canceled") {
+          updateFields.doneAt = null;
+        }
+
         const result = await donationRequestsCollection.updateOne(
           {
             _id: new ObjectId(id),
           },
           {
             $set: updateFields,
-          },
+          }
         );
 
         return res.status(200).json({
@@ -500,9 +479,8 @@ async function run() {
           message: "Donation request status updated successfully",
           modifiedCount: result.modifiedCount,
         });
-      }),
+      })
     );
-
     // delete donation request
 
     app.delete(
@@ -668,6 +646,127 @@ async function run() {
       }),
     );
 
+
+    // donation analytics api advance for charts
+    app.get(
+      "/api/admin/donation-analytics",
+      authMiddleware,
+      checkRoleMiddleware(["admin"]),
+      asyncHandler(async (req, res) => {
+        const donations = await donationRequestsCollection.find().toArray();
+
+        const daysOrder = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+        const monthsOrder = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+
+        const dailyMap = {};
+        const weeklyMap = {};
+        const monthlyMap = {};
+
+        daysOrder.forEach((day) => {
+          dailyMap[day] = {
+            name: day,
+            requests: 0,
+            completed: 0,
+          };
+        });
+
+        monthsOrder.forEach((month) => {
+          monthlyMap[month] = {
+            name: month,
+            requests: 0,
+            completed: 0,
+          };
+        });
+
+        for (let i = 1; i <= 5; i++) {
+          weeklyMap[`Week ${i}`] = {
+            name: `Week ${i}`,
+            requests: 0,
+            completed: 0,
+          };
+        }
+
+        donations.forEach((donation) => {
+          const createdDate = new Date(donation.createdAt);
+
+          // daily
+          const day = createdDate.toLocaleDateString("en-US", {
+            weekday: "short",
+          });
+
+          dailyMap[day].requests += 1;
+
+          if (donation.donationStatus === "done") {
+            const doneDate = donation.doneAt
+              ? new Date(donation.doneAt)
+              : createdDate;
+
+            const doneDay = doneDate.toLocaleDateString("en-US", {
+              weekday: "short",
+            });
+
+            dailyMap[doneDay].completed += 1;
+          }
+
+          // weekly
+          const week = `Week ${Math.ceil(createdDate.getDate() / 7)}`;
+
+          weeklyMap[week].requests += 1;
+
+          if (donation.donationStatus === "done") {
+            const doneDate = donation.doneAt
+              ? new Date(donation.doneAt)
+              : createdDate;
+
+            const doneWeek = `Week ${Math.ceil(doneDate.getDate() / 7)}`;
+
+            weeklyMap[doneWeek].completed += 1;
+          }
+
+          // monthly
+          const month = createdDate.toLocaleDateString("en-US", {
+            month: "short",
+          });
+
+          monthlyMap[month].requests += 1;
+
+          if (donation.donationStatus === "done") {
+            const doneDate = donation.doneAt
+              ? new Date(donation.doneAt)
+              : createdDate;
+
+            const doneMonth = doneDate.toLocaleDateString("en-US", {
+              month: "short",
+            });
+
+            monthlyMap[doneMonth].completed += 1;
+          }
+        });
+
+        return res.status(200).json({
+          success: true,
+          data: {
+            daily: daysOrder.map((day) => dailyMap[day]),
+            weekly: Object.values(weeklyMap),
+            monthly: monthsOrder.map((month) => monthlyMap[month]),
+          },
+        });
+      })
+    );
     await client.db("admin").command({
       ping: 1,
     });
