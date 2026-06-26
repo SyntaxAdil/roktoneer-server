@@ -80,7 +80,7 @@ async function run() {
       checkRoleMiddleware(["admin", "volunteer", "donor"]),
       asyncHandler(async (req, res) => {
         const donorEmail = req.params.email;
-        const { status, page = 1, limit = 3 } = req.query; 
+        const { status, page = 1, limit = 3 } = req.query;
 
         let query = { requesterEmail: donorEmail };
         if (status) {
@@ -95,8 +95,8 @@ async function run() {
           .limit(parseInt(limit))
           .toArray();
 
-    
-        const totalRequests = await donationRequestsCollection.countDocuments(query);
+        const totalRequests =
+          await donationRequestsCollection.countDocuments(query);
 
         return res.status(200).json({
           message: "Donation Request Fetched Successflly",
@@ -232,8 +232,51 @@ async function run() {
       }),
     );
 
+    
+    // donation request pending || Publlic
+    app.get("/api/donation-requests/public-pending", asyncHandler(async (req, res) => {
+      const donationRequests = await donationRequestsCollection
+        .find({ donationStatus: "pending" })
+        .toArray();
+
+      return res.status(200).json({
+        message: "Donation Request Fetched Successflly",
+        data: donationRequests,
+        success: true,
+      });
+    }));
+
+    // Search for donation requests || Public
+    app.get(
+      "/api/donation-requests/search",
+      asyncHandler(async (req, res) => {
+        const { bloodGroup, district, upazila } = req.query;
+        let query = {}; 
+
+        if (bloodGroup) {
+          query.bloodGroup = bloodGroup;
+        }
+        if (district) {
+          query.recipientDistrict = district; 
+        }
+        if (upazila) {
+          query.recipientUpazila = upazila; 
+        }
+
+        const donationRequests = await donationRequestsCollection
+          .find(query)
+          .toArray();
+
+        return res.status(200).json({
+          message: "Donation Request Fetched Successflly",
+          data: donationRequests,
+          success: true,
+        });
+      }),
+    );
 
 
+    
     //TASK- Eta comment korte hbe
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB!");
