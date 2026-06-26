@@ -41,83 +41,149 @@ async function run() {
 
     userCollection = db.collection("user");
     donationRequestsCollection = db.collection("donationRequests");
-// public pending requests
+
+    // active donors  count
 
     app.get(
-  "/api/donation-requests/public-pending",
-  asyncHandler(async (req, res) => {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 6;
-    const skip = (page - 1) * limit;
+      "/api/active-donors-count",
+      asyncHandler(async (req, res) => {
+        const countActiveDonars = await userCollection.countDocuments({
+          role: "donor",
+          status: "active",
+        });
 
-    const query = { donationStatus: "pending" };
+        return res.status(200).json({
+          success: true,
+          message: "Featured donors fetched successfully",
+          data: countActiveDonars,
+        });
+      }),
+    );
+    // public pending requests
 
-    const [donationRequests, totalItems] = await Promise.all([
-      donationRequestsCollection
-        .find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .toArray(),
-      donationRequestsCollection.countDocuments(query),
-    ]);
+    app.get(
+      "/api/donation-requests/public-pending",
+      asyncHandler(async (req, res) => {
+        const { bloodGroup, district, upazila, search } = req.query;
 
-    const totalPages = Math.ceil(totalItems / limit);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 6;
+        const skip = (page - 1) * limit;
 
-    return res.status(200).json({
-      success: true,
-      message: "Pending donation requests fetched successfully",
-      data: donationRequests,
-      currentPage: page,
-      totalPages: totalPages,
-      totalItems: totalItems,
-    });
-  }),
-);
+        let query = {
+          donationStatus: "pending",
+        };
 
-    // search donation requests
-app.get(
-  "/api/donation-requests/search",
-  asyncHandler(async (req, res) => {
-    const { bloodGroup, district, upazila } = req.query;
-    
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 6;
-    const skip = (page - 1) * limit;
+        if (bloodGroup) {
+          query.bloodGroup = bloodGroup;
+        }
 
-    let query = {};
+        if (district) {
+          query.recipientDistrict = district;
+        }
 
-    if (bloodGroup) {
-      query.bloodGroup = bloodGroup;
-    }
+        if (upazila) {
+          query.recipientUpazila = upazila;
+        }
 
-    if (district) {
-      query.recipientDistrict = district;
-    }
+        if (search) {
+          query.$or = [
+            {
+              recipientName: {
+                $regex: search,
+                $options: "i",
+              },
+            },
+            {
+              hospitalName: {
+                $regex: search,
+                $options: "i",
+              },
+            },
+            {
+              fullAddress: {
+                $regex: search,
+                $options: "i",
+              },
+            },
+          ];
+        }
 
-    if (upazila) {
-      query.recipientUpazila = upazila;
-    }
+        const [donationRequests, totalItems] = await Promise.all([
+          donationRequestsCollection
+            .find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .toArray(),
 
-    const totalItems = await donationRequestsCollection.countDocuments(query);
-    const totalPages = Math.ceil(totalItems / limit);
+          donationRequestsCollection.countDocuments(query),
+        ]);
 
-    const donationRequests = await donationRequestsCollection
-      .find(query)
-      .skip(skip)
-      .limit(limit)
-      .toArray();
+        const totalPages = Math.ceil(totalItems / limit);
 
-    return res.status(200).json({
-      success: true,
-      message: "Donation requests fetched successfully",
-      data: donationRequests,
-      totalPages,
-      currentPage: page,
-      totalItems,
-    });
-  }),
-);
+        return res.status(200).json({
+          success: true,
+          message: "Pending donation requests fetched successfully",
+          data: donationRequests,
+          currentPage: page,
+          totalPages,
+          totalItems,
+        });
+      }),
+    );
+
+    // find donar
+    app.get(
+      "/api/users/donors",
+      asyncHandler(async (req, res) => {
+        const { bloodGroup, district, upazila } = req.query;
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 6;
+
+        const skip = (page - 1) * limit;
+
+        let query = {
+          role: "donor",
+          status: "active",
+        };
+
+        if (bloodGroup) {
+          query.bloodGroup = bloodGroup;
+        }
+
+        if (district) {
+          query.district = district;
+        }
+
+        if (upazila) {
+          query.upazila = upazila;
+        }
+
+        const totalItems = await userCollection.countDocuments(query);
+
+        const totalPages = Math.ceil(totalItems / limit);
+
+        const donors = await userCollection
+          .find(query)
+          .skip(skip)
+          .limit(limit)
+          .project({
+            password: 0,
+          })
+          .toArray();
+
+        return res.status(200).json({
+          success: true,
+          message: "Donors fetched successfully",
+          data: donors,
+          totalPages,
+          currentPage: page,
+          totalItems,
+        });
+      }),
+    );
     // all donation requests
 
     app.get(
@@ -214,9 +280,7 @@ app.get(
 
         const { status, page = 1, limit = 3 } = req.query;
 
-        if (
-          req.user.email !== donorEmail
-        ) {
+        if (req.user.email !== donorEmail) {
           return res.status(403).json({
             success: false,
             message: "Forbidden access",
@@ -487,8 +551,6 @@ app.get(
       }),
     );
 
-    
-
     // all users
 
     app.get(
@@ -609,28 +671,6 @@ app.get(
           success: true,
           message: "User role updated successfully",
           modifiedCount: result.modifiedCount,
-        });
-      }),
-    );
-
-    // featured donors
-
-    app.get(
-      "/api/featured-donor",
-      asyncHandler(async (req, res) => {
-        const featuredDonors = await userCollection
-          .find({
-            role: "donor",
-            status: "active",
-          })
-          .sort({ createdAt: -1 })
-          .limit(6)
-          .toArray();
-
-        return res.status(200).json({
-          success: true,
-          message: "Featured donors fetched successfully",
-          data: featuredDonors,
         });
       }),
     );
