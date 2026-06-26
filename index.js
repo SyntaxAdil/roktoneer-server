@@ -219,6 +219,81 @@ async function run() {
       }),
     );
 
+    // update donation request
+
+    app.patch(
+      "/api/donation-requests/:id",
+      authMiddleware,
+      checkRoleMiddleware(["admin", "donor","volunteer"]),
+      asyncHandler(async (req, res) => {
+        const { id } = req.params;
+
+        const donationInfo = await donationRequestsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        if (!donationInfo) {
+          return res.status(404).json({
+            success: false,
+            message: "Donation request not found",
+          });
+        }
+
+       
+        const {
+          recipientName,
+          recipientDistrict,
+          recipientUpazila,
+          hospitalName,
+          bloodGroup,
+          date,
+          time,
+          details,
+          fullAddress,
+        } = req.body;
+
+        if (bloodGroup && !validBloodGroups.includes(bloodGroup)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid blood group",
+          });
+        }
+
+        const allowedUpdates = {
+          recipientName,
+          recipientDistrict,
+          recipientUpazila,
+          hospitalName,
+          bloodGroup,
+          date,
+          time,
+          details,
+          fullAddress,
+        };
+
+        Object.keys(allowedUpdates).forEach(
+          (key) =>
+            allowedUpdates[key] === undefined && delete allowedUpdates[key],
+        );
+
+        const result = await donationRequestsCollection.updateOne(
+          {
+            _id: new ObjectId(id),
+          },
+          {
+            $set: allowedUpdates,
+          },
+        );
+
+        return res.status(200).json({
+          success: true,
+          message: "Donation request updated successfully",
+          modifiedCount: result.modifiedCount,
+        });
+      }),
+    );
+
+
     // create donation request
 
     app.post(
@@ -343,89 +418,7 @@ async function run() {
       }),
     );
 
-    // update donation request
-
-    app.put(
-      "/api/donation-requests/:id",
-      authMiddleware,
-      checkRoleMiddleware(["admin", "donor"]),
-      asyncHandler(async (req, res) => {
-        const { id } = req.params;
-
-        const donationInfo = await donationRequestsCollection.findOne({
-          _id: new ObjectId(id),
-        });
-
-        if (!donationInfo) {
-          return res.status(404).json({
-            success: false,
-            message: "Donation request not found",
-          });
-        }
-
-        if (
-          req.user.email !== donationInfo.requesterEmail &&
-          req.user.role !== "admin"
-        ) {
-          return res.status(403).json({
-            success: false,
-            message: "Forbidden access",
-          });
-        }
-
-        const {
-          recipientName,
-          recipientDistrict,
-          recipientUpazila,
-          hospitalName,
-          bloodGroup,
-          date,
-          time,
-          details,
-          fullAddress,
-        } = req.body;
-
-        if (bloodGroup && !validBloodGroups.includes(bloodGroup)) {
-          return res.status(400).json({
-            success: false,
-            message: "Invalid blood group",
-          });
-        }
-
-        const allowedUpdates = {
-          recipientName,
-          recipientDistrict,
-          recipientUpazila,
-          hospitalName,
-          bloodGroup,
-          date,
-          time,
-          details,
-          fullAddress,
-        };
-
-        Object.keys(allowedUpdates).forEach(
-          (key) =>
-            allowedUpdates[key] === undefined && delete allowedUpdates[key],
-        );
-
-        const result = await donationRequestsCollection.updateOne(
-          {
-            _id: new ObjectId(id),
-          },
-          {
-            $set: allowedUpdates,
-          },
-        );
-
-        return res.status(200).json({
-          success: true,
-          message: "Donation request updated successfully",
-          modifiedCount: result.modifiedCount,
-        });
-      }),
-    );
-
+    
     // update donation request status
 
     app.patch(
