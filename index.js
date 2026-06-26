@@ -232,35 +232,37 @@ async function run() {
       }),
     );
 
-    
     // donation request pending || Publlic
-    app.get("/api/donation-requests/public-pending", asyncHandler(async (req, res) => {
-      const donationRequests = await donationRequestsCollection
-        .find({ donationStatus: "pending" })
-        .toArray();
+    app.get(
+      "/api/donation-requests/public-pending",
+      asyncHandler(async (req, res) => {
+        const donationRequests = await donationRequestsCollection
+          .find({ donationStatus: "pending" })
+          .toArray();
 
-      return res.status(200).json({
-        message: "Donation Request Fetched Successflly",
-        data: donationRequests,
-        success: true,
-      });
-    }));
+        return res.status(200).json({
+          message: "Donation Request Fetched Successflly",
+          data: donationRequests,
+          success: true,
+        });
+      }),
+    );
 
     // Search for donation requests || Public
     app.get(
       "/api/donation-requests/search",
       asyncHandler(async (req, res) => {
         const { bloodGroup, district, upazila } = req.query;
-        let query = {}; 
+        let query = {};
 
         if (bloodGroup) {
           query.bloodGroup = bloodGroup;
         }
         if (district) {
-          query.recipientDistrict = district; 
+          query.recipientDistrict = district;
         }
         if (upazila) {
-          query.recipientUpazila = upazila; 
+          query.recipientUpazila = upazila;
         }
 
         const donationRequests = await donationRequestsCollection
@@ -275,8 +277,157 @@ async function run() {
       }),
     );
 
+    // all user info for admin
+    app.get(
+      "/api/users",
+      verifyToken,
+      checkRoleMiddleware(["admin"]),
+      asyncHandler(async (req, res) => {
+        const { status, page = 1, limit = 3 } = req.query;
 
-    
+        let query = {};
+
+        if (status) {
+          query.status = status;
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const users = await userCollection
+          .find(query)
+          .skip(skip)
+          .limit(parseInt(limit))
+          .toArray();
+
+        const totalUsers = await userCollection.countDocuments(query);
+
+        return res.status(200).json({
+          message: "Users Fetched Successflly",
+          data: users,
+          total: totalUsers,
+          success: true,
+        });
+      }),
+    );
+    // user status control by admin
+    app.patch(
+      "/api/users/status/:id",
+      verifyToken,
+      checkRoleMiddleware(["admin"]),
+      asyncHandler(async (req, res) => {
+        const id = req.params.id;
+        const { status } = req.body;
+
+        const userInfo = await userCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!userInfo) {
+          return res.status(404).json({
+            message: "User not found.",
+            success: false,
+          });
+        }
+
+        let updateFields = { status: status };
+
+        const updateUserStatus = await userCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: updateFields,
+          },
+        );
+        return res.status(200).json({
+          message: "User status updated successfully.",
+          success: true,
+          modifiedCount: updateUserStatus.modifiedCount,
+        });
+      }),
+    );
+
+    // user role change by admin | Donar, Volunteer, Admin
+    app.patch(
+      "/api/users/role/:id",
+      verifyToken,
+      checkRoleMiddleware(["admin"]),
+      asyncHandler(async (req, res) => {
+        const id = req.params.id;
+        const { role } = req.body;
+
+        const userInfo = await userCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        if (!userInfo) {
+          return res.status(404).json({
+            message: "User not found.",
+            success: false,
+          });
+        }
+
+        let updateFields = { role: role };
+
+        const updateUserRole = await userCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: updateFields,
+          },
+        );
+        return res.status(200).json({
+          message: "User role updated successfully.",
+          success: true,
+          modifiedCount: updateUserRole.modifiedCount,
+        });
+      }),
+    );
+
+    // get all donation request for admin
+    app.get(
+      "/api/all-donation-requests",
+      verifyToken,
+      checkRoleMiddleware(["admin", "volunteer"]),
+      asyncHandler(async (req, res) => {
+        const { limit = 3, page = 1, status } = req.query;
+
+        let query = {};
+        if (status) {
+          query.donationStatus = status;
+        }
+
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const donationRequests = await donationRequestsCollection
+          .find(query)
+          .skip(skip)
+          .limit(parseInt(limit))
+          .toArray();
+
+        const totalRequests =
+          await donationRequestsCollection.countDocuments(query);
+
+        return res.status(200).json({
+          message: "Donation Request Fetched Successflly",
+          data: donationRequests,
+          total: totalRequests,
+          success: true,
+        });
+      }),
+    );
+
+    // 06 user data for home page
+    app.get(
+      "/api/feautured-donor",
+      asyncHandler(async (req, res) => {
+        const feauturedDonars = await userCollection
+          .find({ role: "donor" })
+          .sort({ createdAt: -1 })
+          .limit(6)
+          .toArray();
+
+        return res.status(200).json({
+          message: "Featured Donor Fetched Successflly",
+          data: feauturedDonars,
+          success: true,
+        });
+      }),
+    );
+
     //TASK- Eta comment korte hbe
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB!");
