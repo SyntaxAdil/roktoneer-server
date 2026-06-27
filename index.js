@@ -839,7 +839,7 @@ async function run() {
 
       const { email, amount } = req.body;
 
-      console.log(email, amount);
+
 
       if (!email || !amount) {
 
