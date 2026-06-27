@@ -523,13 +523,14 @@ async function run() {
     );
 
     // all users
-
     app.get(
       "/api/users",
-      authMiddleware,
-      checkRoleMiddleware(["admin"]),
       asyncHandler(async (req, res) => {
-        const { status, page = 1, limit = 3 } = req.query;
+        const {
+          status,
+          page = 1,
+          limit = 9999,
+        } = req.query;
 
         let query = {};
 
@@ -537,23 +538,30 @@ async function run() {
           query.status = status;
         }
 
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const skip =
+          (parseInt(page) - 1) *
+          parseInt(limit);
 
-        const users = await userCollection
-          .find(query)
-          .skip(skip)
-          .limit(parseInt(limit))
-          .toArray();
+        const users =
+          await userCollection
+            .find(query)
+            .skip(skip)
+            .limit(parseInt(limit))
+            .toArray();
 
-        const total = await userCollection.countDocuments(query);
+        const total =
+          await userCollection.countDocuments(
+            query
+          );
 
         return res.status(200).json({
           success: true,
-          message: "Users fetched successfully",
+          message:
+            "Users fetched successfully",
           data: users,
           total,
         });
-      }),
+      })
     );
 
     // update user status
