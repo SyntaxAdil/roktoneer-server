@@ -584,19 +584,40 @@ async function run() {
     }));
 
     // api for find user with funds
-    app.get("/api/funds/users", asyncHandler(async (req, res) => {
 
-      const fundedUsers = await userCollection.find({
-        fund: { $gt: 0 }
-      }).toArray();
+    app.get(
+      "/api/funds/users",
+      asyncHandler(async (req, res) => {
 
-      return res.json({
-        success: true,
-        users: fundedUsers
-      });
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 6;
 
-    }))
+        const skip = (page - 1) * limit;
 
+        const query = {
+          fund: { $gt: 0 }
+        };
+
+        const fundedUsers = await userCollection
+          .find(query)
+          .skip(skip)
+          .limit(limit)
+          .toArray();
+
+        const totalUsers = await userCollection.countDocuments(query);
+
+        const totalPages = Math.ceil(totalUsers / limit);
+
+        return res.json({
+          success: true,
+          currentPage: page,
+          totalPages,
+          totalUsers,
+          users: fundedUsers
+        });
+
+      })
+    );
     // update user status
 
     app.patch(
