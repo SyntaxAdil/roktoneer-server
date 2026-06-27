@@ -590,6 +590,7 @@ async function run() {
       asyncHandler(async (req, res) => {
 
         const page = parseInt(req.query.page) || 1;
+
         const limit = parseInt(req.query.limit) || 6;
 
         const skip = (page - 1) * limit;
@@ -600,6 +601,10 @@ async function run() {
 
         const fundedUsers = await userCollection
           .find(query)
+          .sort({
+            fundDate: -1,
+            fund: -1
+          })
           .skip(skip)
           .limit(limit)
           .toArray();
@@ -829,6 +834,46 @@ async function run() {
         });
       })
     );
+    // add funds
+    app.post("/api/funds/add", asyncHandler(async (req, res) => {
+
+      const { email, amount } = req.body;
+
+      console.log(email, amount);
+
+      if (!email || !amount) {
+
+        return res.status(400).json({
+          success: false,
+          message: "Email and amount required"
+        });
+
+      }
+
+      const result = await userCollection.updateOne(
+
+        {
+          email: email
+        },
+
+        {
+          $inc: {
+            fund: Number(amount)
+          },
+
+          $set: {
+            fundDate: new Date().toISOString()
+          }
+        }
+
+      );
+
+      return res.json({
+        success: true,
+        modifiedCount: result.modifiedCount
+      });
+
+    }));
     await client.db("admin").command({
       ping: 1,
     });
