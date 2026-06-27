@@ -563,6 +563,25 @@ async function run() {
         });
       })
     );
+    // api for total funds
+    app.get("/api/users/total-funds", asyncHandler(async (req, res) => {
+
+      const result = await userCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalFunds: { $sum: "$fund" }
+            }
+          }
+        ])
+        .toArray();
+
+      return res.json({
+        success: true,
+        totalFunds: result[0]?.totalFunds || 0
+      });
+    }));
 
     // update user status
 
