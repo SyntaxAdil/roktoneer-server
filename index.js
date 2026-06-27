@@ -33,7 +33,7 @@ const validStatuses = ["pending", "inprogress", "done", "canceled"];
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
 
     const db = client.db("roktoneer");
 
@@ -874,11 +874,11 @@ async function run() {
       });
 
     }));
-    await client.db("admin").command({
-      ping: 1,
-    });
+    // await client.db("admin").command({
+    //   ping: 1,
+    // });
 
-    console.log("Connected to MongoDB!");
+    // console.log("Connected to MongoDB!");
   } catch (error) {
     console.error("MongoDB connection error:", error);
   }
