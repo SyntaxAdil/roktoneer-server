@@ -564,7 +564,7 @@ async function run() {
       })
     );
     // api for total funds
-    app.get("/api/users/total-funds", asyncHandler(async (req, res) => {
+    app.get("/api/funds/total-funds", asyncHandler(async (req, res) => {
 
       const result = await userCollection
         .aggregate([
@@ -582,6 +582,20 @@ async function run() {
         totalFunds: result[0]?.totalFunds || 0
       });
     }));
+
+    // api for find user with funds
+    app.get("/api/funds/users", asyncHandler(async (req, res) => {
+
+      const fundedUsers = await userCollection.find({
+        fund: { $gt: 0 }
+      }).toArray();
+
+      return res.json({
+        success: true,
+        users: fundedUsers
+      });
+
+    }))
 
     // update user status
 
